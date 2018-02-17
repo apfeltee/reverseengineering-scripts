@@ -1,23 +1,23 @@
 
-a set of small scripts that i use for everyday reverse engineering.
-do not expect anything groundbreaking here! :-)
+a set of small scripts that i use for everyday reverse engineering.\\
+do not expect anything groundbreaking here! :-)\\
 
-These are intended as a rough 'overview' - meaning, you won't necessarily
-get a full conclusion of whatever file (or malware) you scan with them.
+These are intended as a rough 'overview' - meaning, you won't necessarily\\
+get a full conclusion of whatever file (or malware) you scan with them.\\
 
 what's included:
 
 - exestrings.rb
 
-	Prints strings in a PE exe file, similar to what GNU strings does, except
-	that, since windows stores text as two byte UTF-16 (i.e., "foo" => "f\0o\0o") it
-	gets rid of the nulbytes. Not a pretty way to do it, but it works.
+	Prints strings in a PE exe file, similar to what GNU strings does, except\\
+	that, since windows stores text as two byte UTF-16 (i.e., "foo" => "f\0o\0o") it\\
+	gets rid of the nulbytes. Not a pretty way to do it, but it works.\\
 
 - grepstrings.rb
 
-	Searches files for quote--enclosed strings, i.e. using grepstrings
-	on `blah foo "zw0rk b0rk" honk quux` would print "zw0rk b0rk".
-	Yes, it's just regular expressions. Can be useful for grepping logs.
+	Searches files for quote-enclosed strings. for example, when\\
+	given `blah foo "zw0rk b0rk" honk quux`, then grepstrings would print "zw0rk b0rk".\\
+	Yes, it's just regular expressions. Can be useful for grepping logs.\\
 
 - jsnice.rb
 
