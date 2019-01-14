@@ -1,17 +1,12 @@
-#!/usr/bin/ruby
+#!/usr/bin/ruby --disable-gems
 
 require "uri"
 require "cgi"
-require "pp"
+#require "pp"
 require "ostruct"
 require "optparse"
 #require "json"
 #require "awesome_print"
-
-AwesomePrint.defaults = {
-  index:  false,
-  indent: -4,
-} if defined?(AwesomePrint)
 
 def _unescape(string, encoding="UTF-8")
   str = string.tr('+', ' ').b.gsub(/((?:%[0-9a-fA-F]{2})+)/){|m|
@@ -44,17 +39,21 @@ module Printers
     data.each do |name, value|
       out.printf("%-10s =>  ", name.to_s)
       if name == :query then
-        out.puts("{")
-        value.each { |qn, qv|
-          out.printf("  %p = ", qn)
-          if qv.is_a?(Array) then
-            out << "[\n" << qv.map{|v| sprintf("    %p", v)}.join(",\n") << "\n  ]"
-          else
-            out.printf("%p", qv)
-          end
-          out.printf("\n")
-        }
-        out.puts("}")
+        if value.length > 0 then
+          out.puts("{")
+          value.each { |qn, qv|
+            out.printf("  %p = ", qn)
+            if qv.is_a?(Array) then
+              out << "[\n" << qv.map{|v| sprintf("    %p", v)}.join(",\n") << "\n  ]"
+            else
+              out.printf("%p", qv)
+            end
+            out.printf("\n")
+          }
+          out.puts("}")
+        else
+          out.puts("{}")
+        end
       else
         out.printf("%p", value)
       end

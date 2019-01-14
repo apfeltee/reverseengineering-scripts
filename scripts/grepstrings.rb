@@ -2,7 +2,10 @@
 
 require "optparse"
 
-STRING_REGEXP = Regexp.new("(\\\"(.*?)\\\"|\'(.*?)\')")
+#STRING_REGEXP = Regexp.new("(\\\"(.*?)\\\"|\'(.*?)\')")
+#STRING_REGEXP = /(?=["'])(?:"[^"\\]*(?:\\[\s\S][^"\\]*)*"|'[^'\\]*(?:\\[\s\S][^'\\]*)*')/
+STRING_REGEXP = /(["'])((?:(?!\1)[^\\]|(?:\\\\)*\\[^\\])*)\1/
+
 
 def ispipe?
   return (not $stdin.tty?)
@@ -17,15 +20,29 @@ end
 class GrepStrings
   def initialize(**options)
     @options = options
+    @seen = []
+  end
+
+  def verbose(fmt, *args)
+    str = if args.empty? then fmt else sprintf(fmt, *args) end
+    if @options[:verbose] then
+      $stderr.printf("verbose: %s\n", str)
+    end
   end
 
   def do_io(io, filename)
-    seen = []
     io.each_line do |line|
       line.scrub.scan(STRING_REGEXP).each do |match|
-        data = match.shift
-        raw = match.shift
-        rest = match
+        #p match
+        #data = match.shift
+        #raw = match.shift
+        #rest = match
+        quot = match[0]
+        realraw = match[1]
+        raw = (quot + realraw + quot)
+        data = realraw #.gsub(/^["']/, "").gsub(/["']$/, "")
+        
+
         if not raw.nil? then
           if @options[:printonly] then
             next if (not raw.ascii_only?)
@@ -33,12 +50,12 @@ class GrepStrings
           if @options[:unique] then
             # this is kept deliberately separately to improve performance
             if @options[:nocase] then
-              next if seen.include?(raw)
-              seen.push(raw)
+              next if @seen.include?(raw)
+              @seen.push(raw)
             else
               sraw = raw.downcase
-              next if seen.include?(sraw)
-              seen.push(sraw)
+              next if @seen.include?(sraw)
+              @seen.push(sraw)
             end
           end
           if @options[:printfilename] then
@@ -59,6 +76,7 @@ begin
     printonly: true,
     printraw: false,
     printfilename: false,
+    verbose: false,
   }
   prs = OptionParser.new{|prs|
     prs.on("-u", "--[no-]unique", "print only unique strings"){|v|
@@ -74,6 +92,12 @@ begin
     prs.on("-p", "--[no-]printable-only", "print only ascii strings"){|v|
       options[:printonly] = v
     }
+    prs.on("-v", "--verbose", "enable verbose messages"){|v|
+      options[:verbose] = true
+    }
+    prs.on("-f", "--printfilename", "print filename as well"){|v|
+      options[:printfilename] = true
+    }
   }
   prs.parse!
   grep = GrepStrings.new(**options)
@@ -87,6 +111,7 @@ begin
     else
       ARGV.each do |filename|
         File.open(filename, "rb") do |fh|
+          grep.verbose("processing %p ...", filename)
           grep.do_io(fh, filename)
         end
       end

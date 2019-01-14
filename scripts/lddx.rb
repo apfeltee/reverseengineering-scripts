@@ -4,8 +4,9 @@ require "optparse"
 require "pedump"
 require "colorize"
 
-def make_paths
+def make_paths(fdir)
   envpaths = ["."] + ENV["PATH"].split(":")
+  envpaths.push(fdir)
   # probably would need to figure out if
   # we're on cygwin, and also if it's 32bit or 64bit, since
   # that actually matters a lot
@@ -28,6 +29,7 @@ end
 def guesspath(dll, envpaths)
   envpaths.each do |dir|
     path = File.join(dir, dll)
+    #$stderr.printf("guesspath(%p, ...) path=%p\n", dll, path)
     if File.file?(path) then
       return path
     end
@@ -40,7 +42,6 @@ class LDDx
     @seen = []
     @recursecache = []
     @opts = opts
-    @envpaths = make_paths
   end
 
   def verbose(fmt, *args)
@@ -52,9 +53,13 @@ class LDDx
 
   def do_ldd(filename)
     recurse = []
+    errcount = 0
+    doprint = (@opts[:testonly] == false)
+    filepath = File.absolute_path(filename)
+    filedir = File.dirname(filepath)
     basename = File.basename(filename).downcase
     if @seen.include?(basename) then
-      return
+      return errcount
     end
     @seen.push(basename)
     begin
@@ -64,7 +69,7 @@ class LDDx
         imports = pe.imports
         if imports.empty? then
           verbose("file has no imports, nothing to do")
-          return
+          return errcount
         end
         tmp = []
         longest = imports.map{|ip| ip.module_name }.max_by(&:length)
@@ -72,9 +77,18 @@ class LDDx
         pad = (if longest.nil? then 0 else longest.length end)
         pe.imports.each do |imp|
           name = imp.module_name
-          ofs = imp.OriginalFirstThunk # i think?? idk
-          path = guesspath(name, @envpaths)
+          # some old binaries seem to pad binaries with space for some reason ...
+          # some kind of oddity from pre-NT?
+          if name.match(/\s$/) then
+            name.strip!
+          end
+          ofs = nil
+          ofs = imp.OriginalFirstThunk rescue 0 # i think? i'm not sure, actually.
+          path = guesspath(name, make_paths(filedir))
           strpath = (path || "(not found)".colorize(:red))
+          if not path then
+            errcount += 1
+          end
           if not @recursecache.include?(File.basename(strpath).downcase) then
             tmp.push([name, ofs, path, strpath])
           end
@@ -85,23 +99,25 @@ class LDDx
           end
           recurse.push(path) if path
         end
-        puts("#{filename}:")
-        tmp.each do |info|
-          name, ofs, path, strpath = info
-          if @opts[:lddformat] then
-            ofsfmt = sprintf("0x%X", ofs).colorize(:blue)
-            printf("    %-#{pad}s => %s (%s)\n", name, strpath, ofsfmt)
-          else
-            strpath = (path || name)
-            printf("  (0x%X) %s%s\n", ofs, strpath, (path == nil ? " (not found)" : ""))
+        if doprint then
+          puts("#{filename}:")
+          tmp.each do |info|
+            name, ofs, path, strpath = info
+            if @opts[:lddformat] then
+              ofsfmt = sprintf("0x%X", ofs).colorize(:blue)
+              printf("    %-#{pad}s => %s (%s)\n", name, strpath, ofsfmt)
+            else
+              strpath = (path || name)
+              printf("  (0x%X) %s%s\n", ofs, strpath, (path == nil ? " (not found)" : ""))
+            end
           end
         end
       end
     rescue => err
-      $stdout.puts("lddx: error reading #{filename.dump}: (#{err.class}) #{err.message}")
-      $stdout.puts("backtrace:")
+      $stderr.puts("lddx: error reading #{filename.dump}: (#{err.class}) #{err.message}")
+      $stderr.puts("backtrace:")
       err.backtrace.each do |line|
-        $stdout.puts("   #{line}")
+        $stderr.puts("   #{line}")
       end
     end
     if @opts[:recursive] then
@@ -111,6 +127,7 @@ class LDDx
         end
       end
     end
+    return errcount
   end
 end
 
@@ -119,7 +136,11 @@ begin
   if not $stdout.tty? then
     String.disable_colorization = true
   end
-  opts = {lddformat: true}
+  opts = {
+    lddformat: true,
+    printfuncs: false,
+    testonly: false,
+  }
   prs = OptionParser.new{|prs|
     prs.on("-v", "--verbose", "toggle verbose output"){|v|
       opts[:verbose] = v
@@ -130,15 +151,23 @@ begin
     prs.on(nil, "--[no-]lddformat", "use traditional 'ldd' style output"){|v|
       opts[:lddformat] = v
     }
+    prs.on("-i", "--printfuncs", "also print imported symbols"){|_|
+      opts[:printfuncs] = true
+    }
+    prs.on("-t", "--test", "only test; don't print (for scripting)"){|_|
+      opts[:testonly] = true
+    }
   }
   prs.parse!
   if ARGV.empty? then
     $stderr.puts("no file arguments given!")
     $stderr.puts(prs.help)
   else
+    ec = 0
     ctx = LDDx.new(**opts)
     ARGV.each do |arg|
-      ctx.do_ldd(arg)
+      ec += ctx.do_ldd(arg)
     end
+    exit(ec > 0 ? 1 : 0)
   end
 end

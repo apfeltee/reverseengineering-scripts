@@ -45,7 +45,7 @@ def stringify(line, maxnulls: 1)
   #bytes.lazy.with_index do |byte, idx|
   while (idx < byteslen)
     byte = bytes[idx]
-    if (byte >= 32) and (byte < 127) then
+    if ((byte > 32) && (byte < 127)) then
       ret.write(byte.chr)
     elsif (byte == 0) then
     end
